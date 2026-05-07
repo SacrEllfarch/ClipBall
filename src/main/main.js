@@ -97,6 +97,7 @@ function resizeWindowBy(deltaWidth, deltaHeight) {
 }
 
 app.whenReady().then(() => {
+  app.setName("ClipBall");
   createMainWindow();
 
   app.on("activate", () => {
@@ -117,4 +118,3 @@ ipcMain.handle("window:get-mode", () => windowMode);
 ipcMain.on("window:resize-by", (_event, delta) => {
   resizeWindowBy(Number(delta?.width) || 0, Number(delta?.height) || 0);
 });
-

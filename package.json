@@ -1,7 +1,7 @@
 {
-  "name": "clipboard-history-ball",
+  "name": "clipball",
   "version": "0.1.0",
-  "description": "一个桌面端剪贴板历史小工具。默认以悬浮球常驻屏幕，点击后展开为可拖拽、可调整大小的历史面板。用户可以查看本地复制历史，点击记录或使用快捷键完成快速粘贴。",
+  "description": "ClipBall 是一个以悬浮球形态常驻桌面的本地剪贴板历史工具。",
   "main": "src/main/main.js",
   "directories": {
     "doc": "docs"
