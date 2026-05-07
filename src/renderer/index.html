@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>剪贴板历史记录工具</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main id="app" class="app app--ball">
+    <button id="floating-ball" class="floating-ball glass" type="button" title="展开剪贴板历史" aria-label="展开剪贴板历史">
+      <span aria-hidden="true">📋</span>
+    </button>
+
+    <section id="history-panel" class="history-panel glass" aria-label="剪贴板历史面板">
+      <header class="panel-header">
+        <div class="header-left">
+          <span aria-hidden="true">🔍</span>
+          <input id="search-input" class="search-input" type="search" placeholder="搜索内容..." aria-label="搜索历史内容">
+        </div>
+        <div class="header-right">
+          <button id="pin-btn" class="icon-btn" type="button" title="固定面板" aria-label="固定面板">📌</button>
+          <button id="close-btn" class="icon-btn" type="button" title="收起" aria-label="收起">✕</button>
+        </div>
+      </header>
+
+      <div id="history-list" class="panel-content" aria-live="polite"></div>
+
+      <footer class="panel-footer">
+        <button class="icon-btn" type="button" title="设置" aria-label="设置">⚙</button>
+        <span id="history-count">已记录 0 / 100 条</span>
+        <button id="clear-btn" class="clear-btn" type="button">清空</button>
+      </footer>
+
+      <div id="resize-handle" class="resize-handle" title="拖拽调整大小" aria-hidden="true"></div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
+

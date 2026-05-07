@@ -1,0 +1,21 @@
+{
+  "name": "clipboard-history-ball",
+  "version": "0.1.0",
+  "description": "一个桌面端剪贴板历史小工具。默认以悬浮球常驻屏幕，点击后展开为可拖拽、可调整大小的历史面板。用户可以查看本地复制历史，点击记录或使用快捷键完成快速粘贴。",
+  "main": "src/main/main.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check src/main/main.js && node --check src/preload/preload.js && node --check src/renderer/app.js",
+    "test": "npm run check"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^42.0.0"
+  }
+}
