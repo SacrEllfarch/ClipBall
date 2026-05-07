@@ -1,10 +1,10 @@
 # 迭代路线
 
-本项目按 Windows exe 版本推进。每个版本都应该保持轻量、可运行、可打包；不为了“架构完整”提前引入重依赖。
+本项目按 Windows exe 版本推进。v0.1 基于 Electron 完成原型验证，v0.2 起迁移至 Tauri。每个版本都应保持轻量、可运行、可打包；不为了“架构完整”提前引入重依赖。
 
-## v0.1：桌面外壳与便携版 exe
+## v0.1：桌面外壳与便携版 exe（Electron，已完成）
 
-目标：建立可以运行和分发的最小桌面外壳。
+目标：建立可以运行和分发的最小桌面外壳，验证产品形态。
 
 已完成：
 
@@ -20,16 +20,21 @@
 release/ClipBall-win32-x64/ClipBall.exe
 ```
 
-## v0.2：文本历史 MVP
+> v0.1 为 Electron 原型，用于快速验证交互和视觉方向。后续版本迁移至 Tauri。
 
-目标：让工具真正记录剪贴板文本，并在重启后恢复。
+## v0.2：Tauri 工程初始化与文本历史 MVP
+
+目标：完成 Electron 到 Tauri 的运行时迁移，并让工具真正记录剪贴板文本，重启后恢复。
 
 范围：
 
-- 主进程低频轮询系统剪贴板文本。
+- Tauri 工程初始化（Rust 后端 + WebView2 前端）。
+- 在 Rust 中复现透明无边框窗口、悬浮球/面板模式切换、置顶。
+- 前端 IPC 调用从 `window.clipboardBall` 迁移至 `invoke`。
+- Rust 后端低频轮询系统剪贴板文本。
 - 文本和链接类型识别。
 - SHA-256 哈希去重。
-- 本地 `history.json` 持久化。
+- 本地 `history.json` 持久化（Tauri `app_data_dir`）。
 - 渲染层展示真实历史记录。
 - 最大记录数裁剪。
 
@@ -41,10 +46,12 @@ release/ClipBall-win32-x64/ClipBall.exe
 
 交付标准：
 
+- `npm run tauri dev` 可启动开发版，悬浮球和面板交互正常。
+- `npm run tauri build` 可产出 Windows exe。
 - 复制文本后，面板中出现新记录。
 - 连续复制相同文本不会重复新增。
 - 重启应用后历史仍存在。
-- `npm run package:win` 可以生成可运行 exe。
+- 包体积相比 Electron 版缩小 80% 以上。
 
 ## v0.3：管理与复制
 
@@ -70,7 +77,7 @@ release/ClipBall-win32-x64/ClipBall.exe
 
 范围：
 
-- 注册全局快捷键打开/收起面板。
+- Rust 后端注册全局快捷键打开/收起面板。
 - 点击记录后可触发快速粘贴。
 - 快速粘贴失败时退化为仅复制。
 - 快捷键冲突时给出提示。
@@ -89,7 +96,7 @@ release/ClipBall-win32-x64/ClipBall.exe
 - 设置面板。
 - 最大记录数量。
 - 暂停记录。
-- 开机启动开关预留或实现。
+- 开机启动开关（Tauri 自动启动插件）。
 - 记住窗口位置和尺寸。
 - 设置保存到 `settings.json`。
 
@@ -121,16 +128,18 @@ release/ClipBall-win32-x64/ClipBall.exe
 
 范围：
 
-- 数据迁移策略。
-- 安装包评估。
-- 开机启动完整流程。
+- 数据迁移策略（如从 JSON 升级至 SQLite）。
+- MSI / NSIS 安装包（Tauri 原生产出）。
+- 开机启动完整流程（Tauri 自动启动插件）。
+- 自动更新（Tauri `updater` 插件）。
 - 更完整的异常处理。
 - 发布说明。
 
-安装包判断：
+产物形式：
 
-- 如果便携版目录分发足够，就继续保持轻量。
-- 如果用户需要卸载入口、桌面快捷方式和自动启动配置，再引入 NSIS 或 electron-builder。
+- 便携版 `ClipBall.exe` 继续提供。
+- MSI 安装包面向需要快捷方式和卸载入口的用户。
+- NSIS 安装包作为轻量安装替代。
 
 ## 延后能力
 
@@ -142,4 +151,4 @@ release/ClipBall-win32-x64/ClipBall.exe
 - 自动过期高级规则。
 - 云同步。
 - AI/OCR。
-- 多平台安装包。
+- 多平台安装包（Tauri 技术上支持，但当前项目聚焦 Windows）。

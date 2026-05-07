@@ -12,28 +12,43 @@
 
 ## 推荐技术方向
 
-优先采用 Electron 作为首版桌面运行时，理由是现有 HTML/CSS/JS 原型可复用，且 Electron 对剪贴板、托盘、全局快捷键、窗口置顶和本地持久化的支持成熟。
+项目已完成基于 Electron 的 v0.1 原型（悬浮球外壳、历史面板 UI、Windows 便携版打包）。为了实质性降低包体积和内存占用，当前主方案已迁移至 Tauri。
 
-可接受替代方案：
+选择 Tauri 的理由：
 
-- Tauri：当项目更重视安装包体积和原生性能时可以评估。
-- 纯 Web：仅适合 UI 原型，不适合最终产品，因为浏览器无法可靠监听系统剪贴板和注册全局快捷键。
+- 前端代码（HTML/CSS/JS）可 100% 复用，迁移成本低。
+- 包体积从 ~120MB 降至 ~5-15MB，更适合轻量桌面小工具定位。
+- Rust 后端提供系统剪贴板、全局快捷键、窗口置顶等能力，与 Electron 功能对等。
+- 原生支持 Windows exe、MSI 安装包和自动更新，利于后续持续迭代分发。
+
+历史方案：
+
+- Electron：首版原型采用，已完成验证，文档和代码中保留相关记录供追溯。
 
 ## 代码组织建议
 
-建议从以下结构起步：
+建议代码结构：
 
 ```text
 .
-├─ src/
-│  ├─ main/              # 桌面主进程：窗口、托盘、剪贴板监听、快捷键、本地存储
-│  ├─ renderer/          # UI：悬浮球、历史面板、设置面板、交互状态
-│  ├─ preload/           # 安全桥接：向 UI 暴露受控 API
-│  └─ shared/            # 类型、常量、数据模型
+├─ src/                  # 前端：悬浮球、历史面板、设置面板、交互状态
+│  ├─ index.html
+│  ├─ styles.css
+│  └─ app.js
+├─ src-tauri/            # Tauri Rust 后端：窗口、剪贴板监听、快捷键、本地存储
+│  ├─ src/
+│  │  ├─ main.rs         # 应用入口、IPC 命令注册
+│  │  ├─ window.rs       # 窗口管理、模式切换
+│  │  ├─ clipboard.rs    # 剪贴板轮询、去重
+│  │  ├─ history_store.rs # JSON 历史存储
+│  │  └─ settings_store.rs # JSON 设置存储
+│  ├─ Cargo.toml
+│  └─ tauri.conf.json
 ├─ docs/
 │  ├─ SDD.md             # 软件设计说明
 │  ├─ PRD.md             # 产品需求说明
-│  └─ ROADMAP.md         # 迭代路线
+│  ├─ ROADMAP.md         # 迭代路线
+│  └─ TAURI_MIGRATION.md # Tauri 迁移计划
 ├─ tests/
 └─ 剪贴板历史记录工具.html
 ```

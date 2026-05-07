@@ -4,11 +4,11 @@
 
 ## 轻量化原则
 
-- 早期不引入业务运行时依赖，`dependencies` 默认保持为空。
-- 能用 Electron 或 Node.js 内置能力完成的，不新增第三方包。
-- 不为了安装包提前引入 electron-builder；v0.x 继续维护便携版 exe。
+- 前端不引入业务运行时依赖，`dependencies` 默认保持为空。
+- 能用 Tauri/Rust 内置能力完成的，不新增第三方包。
+- Rust 依赖通过 `Cargo.toml` 管理，优先使用轻量 crate。
 - 不引入原生数据库模块；MVP 使用 JSON 文件存储历史和设置。
-- 每个版本都必须保持 `npm run check` 和 `npm run package:win` 可执行。
+- 每个版本都必须保持 `npm run check` 和 `npm run tauri build` 可执行。
 
 ## 分支策略
 
@@ -16,7 +16,7 @@
 - `feature/*`：较大的功能可使用特性分支。
 - `fix/*`：缺陷修复分支。
 
-当前项目早期可以直接在 `main` 上推进；当进入快速粘贴、托盘、安装包、跨平台适配或复杂功能时，再拆分特性分支。
+当前项目早期可以直接在 `main` 上推进；Tauri 迁移阶段建议创建 `migrate/tauri` 特性分支，完成后再合并回 `main`。
 
 ## 提交策略
 
@@ -62,43 +62,52 @@ fix(paste): fall back to copy when quick paste fails
 - JSON 本地持久化完成。
 - 快速粘贴完成。
 - 设置面板完成。
+- Tauri 工程初始化完成。
 - 便携版 exe 发布流程完成。
-- 安装包发布流程完成。
+- MSI / NSIS 安装包发布流程完成。
 
 ## 本地检查
 
 项目初始化前以文档检查为主；进入应用开发后，应逐步补充：
 
-- TypeScript 类型检查。
-- 单元测试。
-- UI 构建。
-- Electron 启动检查。
+- Rust 编译检查（`cargo check` / `cargo clippy`）。
+- 前端单元测试（如后续引入）。
+- Tauri 开发版启动检查（`npm run tauri dev`）。
 - 手动验证悬浮球、拖拽、缩放、复制、粘贴、删除、清空。
 
 ## Windows 打包
 
-当前项目提供便携版 exe 打包脚本：
+使用 Tauri 内置打包命令：
 
 ```powershell
-npm run package:win
+npm run tauri build
 ```
 
-构建产物位于：
+构建产物：
 
-```text
-release/ClipBall-win32-x64/ClipBall.exe
-```
+- 便携版 exe：
+  ```text
+  src-tauri/target/release/ClipBall.exe
+  ```
+- MSI 安装包：
+  ```text
+  src-tauri/target/release/bundle/msi/ClipBall_<version>_x64_en-US.msi
+  ```
+- NSIS 安装包：
+  ```text
+  src-tauri/target/release/bundle/nsis/ClipBall_<version>_x64-setup.exe
+  ```
 
-这个 exe 依赖同目录下的 Electron 运行时资源，因此交付时应保留整个 `ClipBall-win32-x64` 文件夹。v0.x 优先发布压缩后的便携版目录；需要卸载入口、桌面快捷方式和开机启动完整安装体验时，再评估 NSIS 或 electron-builder。
+v0.x 优先发布便携版 `ClipBall.exe`；需要卸载入口、桌面快捷方式和开机启动时，直接使用 Tauri 产出的 MSI 或 NSIS 安装包，无需额外工具链。
 
 ## exe 版本发布步骤
 
-1. 更新 `package.json` 中的版本号。
+1. 更新 `package.json` 和 `src-tauri/Cargo.toml` 中的版本号。
 2. 更新 README 或 docs 中对应版本说明。
 3. 运行 `npm run check`。
-4. 运行 `npm run package:win`。
-5. 人工启动 `release/ClipBall-win32-x64/ClipBall.exe` 验证核心流程。
-6. 将整个 `release/ClipBall-win32-x64` 文件夹压缩为发布包。
+4. 运行 `npm run tauri build`。
+5. 人工启动 `src-tauri/target/release/ClipBall.exe` 验证核心流程。
+6. 将 `ClipBall.exe`（或 MSI/NSIS 安装包）作为发布产物。
 7. 提交并推送代码，再创建对应版本标签。
 
 ## 推送约定

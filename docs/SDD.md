@@ -4,13 +4,13 @@
 
 本项目是一个桌面端剪贴板历史工具。应用常驻运行，默认展示悬浮球；用户点击悬浮球或使用快捷键后，显示历史面板。主进程负责系统级能力，渲染进程负责 UI，二者通过受控 IPC 通信。
 
-首版推荐 Electron 架构，以便复用现有 HTML 原型并获得成熟的桌面能力。工程策略以轻量化为先：早期不引入前端框架、原生数据库或重型打包器，先完成稳定可用的 Windows 便携版 exe。
+项目已完成基于 Electron 的 v0.1 原型验证。当前架构迁移至 Tauri，以 Rust 后端驱动系统能力，前端 HTML/CSS/JS 100% 复用。工程策略继续以轻量化为先：不引入前端框架、原生数据库或重型打包器，优先完成稳定可用的 Windows 便携版 exe。
 
 ```mermaid
 flowchart LR
-    User["用户"] --> UI["渲染进程 UI"]
-    UI --> Bridge["Preload 安全桥"]
-    Bridge --> Main["主进程"]
+    User["用户"] --> UI["前端 UI"]
+    UI --> IPC["Tauri IPC (invoke / event)"]
+    IPC --> Main["Rust 后端"]
     Main --> Clipboard["系统剪贴板"]
     Main --> Hotkey["全局快捷键"]
     Main --> Store["本地 JSON 存储"]
@@ -19,13 +19,13 @@ flowchart LR
 
 ## 2. 进程职责
 
-### 2.1 主进程
+### 2.1 Rust 后端
 
 负责所有系统级能力：
 
 - 创建悬浮球窗口和历史面板窗口。
 - 管理窗口位置、大小、置顶和显示状态。
-- 监听剪贴板变化。
+- 监听剪贴板变化（低频轮询）。
 - 注册全局快捷键。
 - 读写本地历史和设置文件。
 - 执行快速粘贴的平台适配逻辑。
@@ -41,56 +41,59 @@ flowchart LR
 - 接收主进程推送的历史更新。
 - 保持视觉风格与 `剪贴板历史记录工具.html` 一致。
 
-### 2.3 Preload 安全桥
+### 2.3 Tauri IPC 通信
 
-只暴露明确允许的 API：
+前端通过 Tauri 的 `invoke` 调用 Rust 后端命令，通过 `listen` 接收后端事件：
 
 ```ts
-type ClipboardHistoryApi = {
-  listItems(query?: string): Promise<ClipboardItem[]>;
-  pasteItem(id: string): Promise<void>;
-  copyItem(id: string): Promise<void>;
-  deleteItem(id: string): Promise<void>;
-  clearItems(): Promise<void>;
-  togglePanel(): Promise<void>;
-  updateSettings(settings: Partial<AppSettings>): Promise<AppSettings>;
-  onItemsChanged(callback: (items: ClipboardItem[]) => void): () => void;
-};
+// 前端调用示例
+import { invoke } from '@tauri-apps/api/tauri';
+import { listen } from '@tauri-apps/api/event';
+
+invoke('list_items', { query?: string }): Promise<ClipboardItem[]>;
+invoke('paste_item', { id: string }): Promise<void>;
+invoke('delete_item', { id: string }): Promise<void>;
+invoke('clear_items'): Promise<void>;
+invoke('update_settings', { settings: Partial<AppSettings> }): Promise<AppSettings>;
+
+listen('history:changed', (event) => { ... });
 ```
 
-渲染进程不应直接访问 Node.js、文件系统或系统命令。
+前端不应直接访问文件系统或执行系统命令，所有系统交互必须通过 Rust 命令完成。
 
 ## 3. 窗口设计
 
-首版可以使用一个透明无边框窗口，在 UI 内部切换悬浮球和面板状态；也可以拆成两个窗口。推荐首版使用单窗口，降低状态同步复杂度。
+使用一个透明无边框窗口，在 UI 内部切换悬浮球和面板状态。单窗口方案降低状态同步复杂度。
 
 窗口要求：
 
-- `alwaysOnTop: true`。
-- `frame: false`。
+- `always_on_top: true`（Tauri `WindowBuilder`）。
+- `decorations: false`。
 - `transparent: true`。
 - 悬浮球状态尺寸较小。
 - 面板状态恢复上次位置和尺寸。
 - 面板最小宽高限制，避免内容不可用。
+- 拖拽区域使用 `data-tauri-drag-region` 属性标记。
 
 ## 4. 模块拆分
 
-在保持轻量的前提下，主进程按能力拆分：
+在保持轻量的前提下，Rust 后端按能力拆分：
 
 ```text
-src/main/
-├─ main.js           # 应用入口、窗口、IPC 注册
-├─ clipboard.js      # 剪贴板轮询、哈希、类型识别
-├─ history-store.js  # JSON 历史存储
-├─ settings-store.js # JSON 设置存储
-└─ paste-adapter.js  # 快速粘贴平台适配
+src-tauri/src/
+├─ main.rs           # 应用入口、Tauri 命令注册
+├─ window.rs         # 窗口管理、模式切换、置顶
+├─ clipboard.rs      # 剪贴板轮询、哈希、类型识别
+├─ history_store.rs  # JSON 历史存储
+├─ settings_store.rs # JSON 设置存储
+└─ paste_adapter.rs  # 快速粘贴平台适配
 ```
 
-渲染层暂时保留原生 HTML/CSS/JS。当 UI 复杂度明显增加后，再评估是否引入组件化方案。
+前端暂时保留原生 HTML/CSS/JS。当 UI 复杂度明显增加后，再评估是否引入组件化方案。
 
 ## 5. 剪贴板监听设计
 
-Electron 本身没有跨平台剪贴板变更事件，首版采用低频轮询：
+Tauri 本身没有跨平台剪贴板变更事件，首版采用低频轮询：
 
 - 默认间隔：800ms。
 - 应用暂停记录时停止轮询。
@@ -163,10 +166,10 @@ MVP 使用 JSON 文件而不是 SQLite：
 - 文件可人工排查，早期调试成本低。
 - 记录数量默认较小，内存过滤足够可用。
 
-存储位置使用 Electron `app.getPath("userData")`：
+存储位置使用 Tauri `app_data_dir()`：
 
 ```text
-<userData>/
+<app_data_dir>/
 ├─ history.json
 ├─ settings.json
 └─ logs/
@@ -256,16 +259,19 @@ sequenceDiagram
 早期发布以 Windows 便携版 exe 为主：
 
 ```text
-release/ClipBall-win32-x64/ClipBall.exe
+src-tauri/target/release/ClipBall.exe
 ```
 
-打包脚本只复制 Electron Windows 运行时和应用源码，不引入 electron-builder。交付时压缩整个 `ClipBall-win32-x64` 文件夹，因为 exe 依赖同目录资源。
+使用 `tauri build` 内置打包，无需自定义脚本。Tauri 同时原生支持 MSI 和 NSIS 安装包：
 
-后续进入 v1.0 前再评估安装包：
+```text
+src-tauri/target/release/bundle/msi/ClipBall_<version>_x64_en-US.msi
+src-tauri/target/release/bundle/nsis/ClipBall_<version>_x64-setup.exe
+```
 
-- 需要桌面快捷方式、卸载入口、开机启动时再引入。
-- 优先评估 NSIS 小脚本；electron-builder 作为备选。
-- 安装包不应阻塞 v0.x 的功能迭代。
+- v0.x 优先便携版 `ClipBall.exe`，适合快速迭代和手动分发。
+- 需要桌面快捷方式、卸载入口、开机启动时直接使用 Tauri 产出的 MSI 或 NSIS 安装包，无需额外工具链。
+- v1.0 评估启用 Tauri 内置自动更新插件。
 
 ## 12. 错误处理
 
@@ -298,9 +304,9 @@ MVP 需要覆盖：
 
 ## 14. 版本演进
 
-- V0.1：当前悬浮球、历史面板、便携版 exe。
-- V0.2：文本和链接监听、JSON 持久化、真实历史列表。
+- V0.1：Electron 原型验证（悬浮球、历史面板、便携版 exe）—— 已完成。
+- V0.2：Tauri 工程初始化、窗口移植、文本和链接监听、JSON 持久化、真实历史列表。
 - V0.3：搜索、删除、清空、点击复制。
 - V0.4：快捷键打开面板、快速粘贴和失败降级。
 - V0.5：设置面板、暂停记录、最大记录数。
-- V1.0：图标、托盘、日志、开机启动、安装包评估。
+- V1.0：图标、托盘、日志、开机启动、自动更新、安装包。
