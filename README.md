@@ -43,6 +43,20 @@ npm start
 npm run check
 ```
 
+生成 Windows 便携版 exe：
+
+```powershell
+npm run package:win
+```
+
+产物位置：
+
+```text
+release/ClipBall-win32-x64/ClipBall.exe
+```
+
+注意：当前产物是便携版应用目录，运行时需要保留同目录下的 Electron 资源文件。后续如果需要单文件安装包，可以在此基础上接入 NSIS 安装器。
+
 ## 计划中的核心功能
 
 | 功能 | 说明 | 优先级 |
@@ -90,4 +104,5 @@ npm run check
 - 已初始化 Electron 应用骨架。
 - 已迁移悬浮球和历史面板 UI。
 - 已加入主进程窗口模式切换、preload 安全桥和渲染层示例数据。
+- 已加入 Windows 便携版 exe 打包脚本。
 - 尚未接入真实剪贴板监听、本地持久化和快速粘贴。

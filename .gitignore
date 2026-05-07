@@ -6,6 +6,7 @@ dist/
 out/
 build/
 release/
+.cache-electron-*
 
 # Runtime data
 *.db
@@ -22,4 +23,3 @@ logs/
 Thumbs.db
 .idea/
 .vscode/
-

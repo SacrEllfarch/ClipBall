@@ -67,6 +67,22 @@ fix(paste): fall back to copy when quick paste fails
 - Electron 启动检查。
 - 手动验证悬浮球、拖拽、缩放、复制、粘贴、删除、清空。
 
+## Windows 打包
+
+当前项目提供便携版 exe 打包脚本：
+
+```powershell
+npm run package:win
+```
+
+构建产物位于：
+
+```text
+release/ClipBall-win32-x64/ClipBall.exe
+```
+
+这个 exe 依赖同目录下的 Electron 运行时资源，因此交付时应保留整个 `ClipBall-win32-x64` 文件夹。需要单文件安装包时，再接入 `electron-builder` 或 NSIS。
+
 ## 推送约定
 
 远端仓库配置后，默认使用：
@@ -87,4 +103,3 @@ git push
 git remote add origin <remote-url>
 git push -u origin main
 ```
-
