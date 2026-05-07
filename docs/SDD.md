@@ -4,7 +4,7 @@
 
 本项目是一个桌面端剪贴板历史工具。应用常驻运行，默认展示悬浮球；用户点击悬浮球或使用快捷键后，显示历史面板。主进程负责系统级能力，渲染进程负责 UI，二者通过受控 IPC 通信。
 
-首版推荐 Electron 架构，以便复用现有 HTML 原型并获得成熟的桌面能力。
+首版推荐 Electron 架构，以便复用现有 HTML 原型并获得成熟的桌面能力。工程策略以轻量化为先：早期不引入前端框架、原生数据库或重型打包器，先完成稳定可用的 Windows 便携版 exe。
 
 ```mermaid
 flowchart LR
@@ -13,7 +13,7 @@ flowchart LR
     Bridge --> Main["主进程"]
     Main --> Clipboard["系统剪贴板"]
     Main --> Hotkey["全局快捷键"]
-    Main --> Store["本地数据库"]
+    Main --> Store["本地 JSON 存储"]
     Main --> Paste["平台粘贴适配器"]
 ```
 
@@ -27,7 +27,7 @@ flowchart LR
 - 管理窗口位置、大小、置顶和显示状态。
 - 监听剪贴板变化。
 - 注册全局快捷键。
-- 读写本地数据库。
+- 读写本地历史和设置文件。
 - 执行快速粘贴的平台适配逻辑。
 - 处理托盘、开机启动等后续桌面能力。
 
@@ -73,22 +73,38 @@ type ClipboardHistoryApi = {
 - 面板状态恢复上次位置和尺寸。
 - 面板最小宽高限制，避免内容不可用。
 
-## 4. 剪贴板监听设计
+## 4. 模块拆分
+
+在保持轻量的前提下，主进程按能力拆分：
+
+```text
+src/main/
+├─ main.js           # 应用入口、窗口、IPC 注册
+├─ clipboard.js      # 剪贴板轮询、哈希、类型识别
+├─ history-store.js  # JSON 历史存储
+├─ settings-store.js # JSON 设置存储
+└─ paste-adapter.js  # 快速粘贴平台适配
+```
+
+渲染层暂时保留原生 HTML/CSS/JS。当 UI 复杂度明显增加后，再评估是否引入组件化方案。
+
+## 5. 剪贴板监听设计
 
 Electron 本身没有跨平台剪贴板变更事件，首版采用低频轮询：
 
-- 默认间隔：500ms 到 1000ms。
+- 默认间隔：800ms。
 - 应用暂停记录时停止轮询。
 - 读取文本内容后计算哈希。
 - 哈希与上一条相同则忽略。
 - 空内容忽略。
 - 超过最大长度的文本可截断预览，但原文是否保存由设置决定。
+- 默认只记录文本和链接。
 
 后续可针对不同系统替换为原生事件监听。
 
-## 5. 数据模型
+## 6. 数据模型
 
-### 5.1 ClipboardItem
+### 6.1 ClipboardItem
 
 ```ts
 type ClipboardItemType = "text" | "link" | "image" | "file";
@@ -112,11 +128,14 @@ type ClipboardItem = {
 };
 ```
 
-### 5.2 AppSettings
+### 6.2 AppSettings
 
 ```ts
 type AppSettings = {
   maxItems: number;
+  pollIntervalMs: number;
+  maxTextLength: number;
+  previewLength: number;
   autoDeleteDays?: number;
   recordText: boolean;
   recordLinks: boolean;
@@ -136,45 +155,34 @@ type AppSettings = {
 };
 ```
 
-## 6. 本地存储
+## 7. 本地存储
 
-推荐使用 SQLite：
+MVP 使用 JSON 文件而不是 SQLite：
 
-- 适合历史记录查询、删除、迁移。
-- 支持按时间、收藏、类型、哈希索引。
-- 便于后续扩展图片和文件元数据。
+- 无原生依赖，便携版 exe 更容易稳定产出。
+- 文件可人工排查，早期调试成本低。
+- 记录数量默认较小，内存过滤足够可用。
 
-MVP 表结构：
+存储位置使用 Electron `app.getPath("userData")`：
 
-```sql
-CREATE TABLE clipboard_items (
-  id TEXT PRIMARY KEY,
-  type TEXT NOT NULL,
-  title TEXT,
-  preview TEXT NOT NULL,
-  content_text TEXT,
-  content_path TEXT,
-  mime_type TEXT,
-  size_bytes INTEGER,
-  hash TEXT NOT NULL,
-  is_favorite INTEGER NOT NULL DEFAULT 0,
-  source_app TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  last_used_at TEXT,
-  use_count INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE INDEX idx_clipboard_items_created_at
-ON clipboard_items(created_at DESC);
-
-CREATE UNIQUE INDEX idx_clipboard_items_hash_type
-ON clipboard_items(hash, type);
+```text
+<userData>/
+├─ history.json
+├─ settings.json
+└─ logs/
 ```
 
-设置可保存为 JSON 文件，也可保存到 SQLite `settings` 表。首版建议 JSON，便于人工排查。
+写入策略：
 
-## 7. 快速粘贴流程
+- 读取失败时返回空历史并记录错误。
+- 写入时先写临时文件，再重命名为正式文件。
+- 每次新增记录后按 `maxItems` 裁剪非收藏记录。
+- 默认 `maxItems` 为 100。
+- 默认 `maxTextLength` 为 20000，避免极端大文本拖慢常驻进程。
+
+当历史规模、查询复杂度或多类型内容存储超过 JSON 能力时，再升级为 SQLite，并提供一次性迁移脚本。
+
+## 8. 快速粘贴流程
 
 点击记录后的流程：
 
@@ -204,7 +212,7 @@ sequenceDiagram
 
 快速粘贴应放在平台适配层，方便替换底层实现。
 
-## 8. UI 设计继承
+## 9. UI 设计继承
 
 从现有原型继承：
 
@@ -225,7 +233,7 @@ sequenceDiagram
 - `HistoryFooter`
 - `SettingsPanel`
 
-## 9. IPC 设计
+## 10. IPC 设计
 
 建议通道：
 
@@ -243,15 +251,31 @@ sequenceDiagram
 
 所有 IPC 参数都需要校验，避免渲染进程传入任意路径或任意命令。
 
-## 10. 错误处理
+## 11. 打包设计
+
+早期发布以 Windows 便携版 exe 为主：
+
+```text
+release/ClipBall-win32-x64/ClipBall.exe
+```
+
+打包脚本只复制 Electron Windows 运行时和应用源码，不引入 electron-builder。交付时压缩整个 `ClipBall-win32-x64` 文件夹，因为 exe 依赖同目录资源。
+
+后续进入 v1.0 前再评估安装包：
+
+- 需要桌面快捷方式、卸载入口、开机启动时再引入。
+- 优先评估 NSIS 小脚本；electron-builder 作为备选。
+- 安装包不应阻塞 v0.x 的功能迭代。
+
+## 12. 错误处理
 
 - 剪贴板读取失败：记录日志并跳过本轮。
-- 数据库写入失败：UI 显示轻量错误状态，保留内存中的最近记录。
+- JSON 写入失败：UI 显示轻量错误状态，保留内存中的最近记录。
 - 快速粘贴失败：退化为仅复制到剪贴板。
 - 快捷键注册失败：设置页提示冲突并要求用户更换。
-- 数据库迁移失败：备份旧数据库后停止迁移，避免破坏数据。
+- 存储迁移失败：备份旧数据后停止迁移，避免破坏用户历史。
 
-## 11. 测试策略
+## 13. 测试策略
 
 MVP 需要覆盖：
 
@@ -262,6 +286,7 @@ MVP 需要覆盖：
 - 设置读写。
 - IPC 参数校验。
 - UI 列表过滤。
+- Windows 便携版 exe 启动。
 
 桌面端集成测试可后置，但发布前应人工验证：
 
@@ -271,11 +296,11 @@ MVP 需要覆盖：
 - 复制记录和快速粘贴。
 - 重启后数据恢复。
 
-## 12. 版本演进
+## 14. 版本演进
 
-- V0.1：文本历史 MVP。
-- V0.2：搜索、收藏、设置面板、快捷键配置。
-- V0.3：图片和文件记录。
-- V0.4：忽略应用、自动过期、敏感内容保护。
-- V1.0：安装包、开机启动、稳定迁移、完整错误提示。
-
+- V0.1：当前悬浮球、历史面板、便携版 exe。
+- V0.2：文本和链接监听、JSON 持久化、真实历史列表。
+- V0.3：搜索、删除、清空、点击复制。
+- V0.4：快捷键打开面板、快速粘贴和失败降级。
+- V0.5：设置面板、暂停记录、最大记录数。
+- V1.0：图标、托盘、日志、开机启动、安装包评估。
