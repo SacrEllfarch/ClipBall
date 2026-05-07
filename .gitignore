@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+out/
+build/
+release/
+
+# Runtime data
+*.db
+*.sqlite
+*.sqlite3
+logs/
+
+# Environment
+.env
+.env.*
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
