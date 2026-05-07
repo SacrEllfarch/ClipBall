@@ -48,8 +48,18 @@ let isPinned = false;
 let visibleItems = [...historyItems];
 
 function getApi() {
-  return window.clipboardBall ?? {
+  if (window.__TAURI__) {
+    const { invoke } = window.__TAURI__.tauri;
+    return {
+      setWindowMode: (mode) => invoke("set_window_mode", { mode }),
+      getWindowMode: () => invoke("get_window_mode"),
+      resizeWindowBy: (width, height) =>
+        invoke("resize_window_by", { width, height }),
+    };
+  }
+  return {
     setWindowMode: async () => {},
+    getWindowMode: async () => "ball",
     resizeWindowBy: () => {},
   };
 }
@@ -133,7 +143,9 @@ function renderHistory(items) {
 
 function filterHistory() {
   const query = searchInput.value.trim().toLowerCase();
-  visibleItems = historyItems.filter((item) => item.body.toLowerCase().includes(query));
+  visibleItems = historyItems.filter((item) =>
+    item.body.toLowerCase().includes(query),
+  );
   renderHistory(visibleItems);
 }
 

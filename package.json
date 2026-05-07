@@ -1,14 +1,14 @@
 {
   "name": "clipball",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "ClipBall 是一个以悬浮球形态常驻桌面的本地剪贴板历史工具。",
-  "main": "src/main/main.js",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
-    "start": "node -e \"require((process.env.INIT_CWD || process.cwd()) + '/scripts/start.js')\"",
-    "package:win": "node -e \"require((process.env.INIT_CWD || process.cwd()) + '/scripts/package-win.js')\"",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
     "check": "node -e \"require((process.env.INIT_CWD || process.cwd()) + '/scripts/check.js')\"",
     "test": "npm run check"
   },
@@ -17,6 +17,6 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "electron": "^42.0.0"
+    "@tauri-apps/cli": "^2"
   }
 }

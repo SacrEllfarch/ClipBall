@@ -98,7 +98,6 @@ button {
   padding: 12px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.52);
   user-select: none;
-  -webkit-app-region: drag;
 }
 
 .header-left,
@@ -115,7 +114,6 @@ button {
 
 .header-right {
   gap: 8px;
-  -webkit-app-region: no-drag;
 }
 
 .search-input {
@@ -127,7 +125,6 @@ button {
   padding: 6px 11px;
   color: var(--text-primary);
   background: rgba(20, 28, 40, 0.07);
-  -webkit-app-region: no-drag;
 }
 
 .search-input:focus {
@@ -303,4 +300,3 @@ button {
   color: var(--text-secondary);
   font-size: 13px;
 }
-

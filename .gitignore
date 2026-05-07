@@ -1,6 +1,10 @@
 # Dependencies
 node_modules/
 
+# Rust
+src-tauri/target/
+Cargo.lock
+
 # Build outputs
 dist/
 out/
