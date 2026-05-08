@@ -3,16 +3,24 @@ const floatingBall = document.getElementById("floating-ball");
 const historyPanel = document.getElementById("history-panel");
 const closeBtn = document.getElementById("close-btn");
 const clearBtn = document.getElementById("clear-btn");
+const settingsBtn = document.getElementById("settings-btn");
 const historyList = document.getElementById("history-list");
+const settingsView = document.getElementById("settings-view");
+const panelTitle = document.getElementById("panel-title");
+const toastEl = document.getElementById("toast");
 
-const DRAG_THRESHOLD = 4; // 移动超过该像素则视为拖动
+const inputPaused = document.getElementById("setting-paused");
+const inputAutostart = document.getElementById("setting-autostart");
+const inputRemember = document.getElementById("setting-remember");
+const inputMax = document.getElementById("setting-max");
+const settingStatus = document.getElementById("setting-status");
+
+const DRAG_THRESHOLD = 4;
 let historyItems = [];
+let currentSettings = null;
+let view = "history"; // "history" | "settings"
 
-function getTauri() {
-  return window.__TAURI__ || null;
-}
-
-const tauri = getTauri();
+const tauri = window.__TAURI__ || null;
 const invoke = tauri?.core?.invoke || tauri?.tauri?.invoke || null;
 const listen = tauri?.event?.listen || null;
 
@@ -26,6 +34,9 @@ const api = invoke
       deleteItem: (id) => invoke("delete_history_item", { id }),
       clearAll: () => invoke("clear_history"),
       copyText: (body) => invoke("copy_to_clipboard", { body }),
+      pasteText: (body) => invoke("paste_history_item", { body }),
+      getSettings: () => invoke("get_settings"),
+      updateSettings: (settings) => invoke("update_settings", { settings }),
     }
   : {
       setMode: async () => {},
@@ -36,7 +47,24 @@ const api = invoke
       deleteItem: async () => {},
       clearAll: async () => {},
       copyText: async () => {},
+      pasteText: async () => {},
+      getSettings: async () => ({
+        maxHistory: 100,
+        paused: false,
+        autostart: false,
+        rememberPosition: true,
+      }),
+      updateSettings: async (s) => s,
     };
+
+function showToast(text, ms = 1400) {
+  toastEl.textContent = text;
+  toastEl.hidden = false;
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => {
+    toastEl.hidden = true;
+  }, ms);
+}
 
 async function loadHistory() {
   try {
@@ -47,13 +75,39 @@ async function loadHistory() {
   }
 }
 
+async function loadSettings() {
+  try {
+    currentSettings = await api.getSettings();
+    if (!currentSettings) return;
+    inputPaused.checked = !!currentSettings.paused;
+    inputAutostart.checked = !!currentSettings.autostart;
+    inputRemember.checked = !!currentSettings.rememberPosition;
+    inputMax.value = currentSettings.maxHistory ?? 100;
+  } catch (e) {
+    console.error("[clipball] Failed to load settings:", e);
+  }
+}
+
 function setMode(mode) {
   appRoot.classList.toggle("app--ball", mode === "ball");
   appRoot.classList.toggle("app--panel", mode === "panel");
   api.setMode(mode);
   if (mode === "panel") {
+    setView("history");
     loadHistory();
   }
+}
+
+function setView(next) {
+  view = next;
+  const isSettings = next === "settings";
+  historyList.hidden = isSettings;
+  settingsView.hidden = !isSettings;
+  clearBtn.hidden = isSettings;
+  panelTitle.textContent = isSettings ? "设置" : "剪贴板历史";
+  settingsBtn.textContent = isSettings ? "←" : "⚙";
+  settingsBtn.title = isSettings ? "返回" : "设置";
+  if (isSettings) loadSettings();
 }
 
 function renderHistory() {
@@ -62,7 +116,9 @@ function renderHistory() {
   if (historyItems.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "暂无剪贴板历史";
+    empty.textContent = currentSettings?.paused
+      ? "已暂停记录"
+      : "暂无剪贴板历史";
     historyList.append(empty);
     return;
   }
@@ -95,17 +151,31 @@ function renderHistory() {
     });
 
     row.append(meta, body, del);
-    row.addEventListener("click", () => copyItem(item));
+    row.addEventListener("click", () => pasteItem(item));
+    row.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      copyItem(item);
+    });
     row.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") copyItem(item);
+      if (event.key === "Enter") pasteItem(item);
     });
     historyList.append(row);
+  }
+}
+
+async function pasteItem(item) {
+  try {
+    await api.pasteText(item.body);
+  } catch (e) {
+    console.error("[clipball] Paste failed:", e);
+    showToast("粘贴失败，已复制到剪贴板");
   }
 }
 
 async function copyItem(item) {
   try {
     await api.copyText(item.body);
+    showToast("已复制");
   } catch (e) {
     console.error("[clipball] Copy failed:", e);
   }
@@ -131,7 +201,24 @@ async function clearAll() {
   }
 }
 
-// 悬浮球：短按展开，长按（超过阈值）则拖动窗口
+async function persistSettings(partial) {
+  if (!currentSettings) {
+    currentSettings = await api.getSettings();
+  }
+  const next = { ...currentSettings, ...partial };
+  try {
+    currentSettings = await api.updateSettings(next);
+    settingStatus.textContent = "已保存";
+    setTimeout(() => {
+      if (settingStatus.textContent === "已保存") settingStatus.textContent = "";
+    }, 1200);
+  } catch (e) {
+    console.error("[clipball] Save settings failed:", e);
+    settingStatus.textContent = "保存失败";
+  }
+}
+
+// 悬浮球：短按展开，长按拖动
 let ballDownPos = null;
 let ballDragging = false;
 
@@ -170,10 +257,34 @@ closeBtn.addEventListener("click", () => setMode("ball"));
 clearBtn.addEventListener("click", () => {
   if (confirm("确定清空所有剪贴板历史？")) clearAll();
 });
+settingsBtn.addEventListener("click", () => {
+  setView(view === "settings" ? "history" : "settings");
+});
 
-// ESC 收起面板
+// 设置项变更
+inputPaused.addEventListener("change", () =>
+  persistSettings({ paused: inputPaused.checked })
+);
+inputAutostart.addEventListener("change", () =>
+  persistSettings({ autostart: inputAutostart.checked })
+);
+inputRemember.addEventListener("change", () =>
+  persistSettings({ rememberPosition: inputRemember.checked })
+);
+inputMax.addEventListener("change", () => {
+  let v = parseInt(inputMax.value, 10);
+  if (isNaN(v)) v = 100;
+  v = Math.max(10, Math.min(500, v));
+  inputMax.value = v;
+  persistSettings({ maxHistory: v });
+});
+
+// ESC：先退出设置，再收起
 historyPanel.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") setMode("ball");
+  if (event.key === "Escape") {
+    if (view === "settings") setView("history");
+    else setMode("ball");
+  }
 });
 
 // 监听后端事件
@@ -182,28 +293,48 @@ if (listen) {
     const item = event.payload;
     if (item && !historyItems.some((i) => i.id === item.id)) {
       historyItems.unshift(item);
-      if (historyItems.length > 100) historyItems.pop();
-      if (appRoot.classList.contains("app--panel")) renderHistory();
+      const max = currentSettings?.maxHistory ?? 100;
+      if (historyItems.length > max) historyItems.length = max;
+      if (appRoot.classList.contains("app--panel") && view === "history") {
+        renderHistory();
+      }
     }
   });
 
   listen("history:deleted", (event) => {
     historyItems = historyItems.filter((i) => i.id !== event.payload);
-    if (appRoot.classList.contains("app--panel")) renderHistory();
+    if (appRoot.classList.contains("app--panel") && view === "history") {
+      renderHistory();
+    }
   });
 
   listen("history:cleared", () => {
     historyItems = [];
-    if (appRoot.classList.contains("app--panel")) renderHistory();
+    if (appRoot.classList.contains("app--panel") && view === "history") {
+      renderHistory();
+    }
   });
 
-  // 全局快捷键触发的模式切换
   listen("window:mode", (event) => {
     const mode = event.payload;
     appRoot.classList.toggle("app--ball", mode === "ball");
     appRoot.classList.toggle("app--panel", mode === "panel");
-    if (mode === "panel") loadHistory();
+    if (mode === "panel") {
+      setView("history");
+      loadHistory();
+    }
+  });
+
+  listen("settings:updated", (event) => {
+    currentSettings = event.payload;
+  });
+
+  listen("paste:fallback", () => {
+    showToast("粘贴失败，已复制到剪贴板");
   });
 }
 
-loadHistory();
+(async () => {
+  await loadSettings();
+  await loadHistory();
+})();

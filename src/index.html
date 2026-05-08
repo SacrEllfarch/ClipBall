@@ -14,14 +14,38 @@
 
     <section id="history-panel" class="history-panel glass" aria-label="剪贴板历史面板">
       <header class="panel-header" data-tauri-drag-region>
-        <span class="panel-title" data-tauri-drag-region>剪贴板历史</span>
+        <span class="panel-title" data-tauri-drag-region id="panel-title">剪贴板历史</span>
         <div class="header-actions">
+          <button id="settings-btn" class="icon-btn" type="button" title="设置" aria-label="设置">⚙</button>
           <button id="clear-btn" class="icon-btn" type="button" title="清空" aria-label="清空">🗑</button>
           <button id="close-btn" class="icon-btn" type="button" title="收起" aria-label="收起">✕</button>
         </div>
       </header>
 
       <div id="history-list" class="panel-content" aria-live="polite"></div>
+
+      <section id="settings-view" class="panel-content settings-view" hidden>
+        <label class="setting-row">
+          <span class="setting-label">暂停记录</span>
+          <input id="setting-paused" type="checkbox" />
+        </label>
+        <label class="setting-row">
+          <span class="setting-label">开机自启动</span>
+          <input id="setting-autostart" type="checkbox" />
+        </label>
+        <label class="setting-row">
+          <span class="setting-label">记忆窗口位置</span>
+          <input id="setting-remember" type="checkbox" />
+        </label>
+        <label class="setting-row setting-row--col">
+          <span class="setting-label">最大记录数 (10 - 500)</span>
+          <input id="setting-max" type="number" min="10" max="500" step="10" />
+        </label>
+        <div class="setting-tip">快捷键：Ctrl+Shift+V 切换面板 / Ctrl+Shift+Q 退出</div>
+        <div class="setting-status" id="setting-status"></div>
+      </section>
+
+      <div id="toast" class="toast" hidden></div>
     </section>
   </main>
 

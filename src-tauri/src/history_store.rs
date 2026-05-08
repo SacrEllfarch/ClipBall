@@ -1,12 +1,11 @@
+use crate::settings_store::SettingsStore;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager};
-
-const MAX_HISTORY_COUNT: usize = 100;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryItem {
@@ -26,13 +25,15 @@ pub struct HistoryItem {
 pub struct HistoryStore {
     items: Mutex<Vec<HistoryItem>>,
     app_handle: AppHandle,
+    settings: Arc<SettingsStore>,
 }
 
 impl HistoryStore {
-    pub fn new(app_handle: AppHandle) -> Self {
+    pub fn new(app_handle: AppHandle, settings: Arc<SettingsStore>) -> Self {
         let store = Self {
             items: Mutex::new(Vec::new()),
             app_handle,
+            settings,
         };
         let _ = store.load();
         store
@@ -112,8 +113,9 @@ impl HistoryStore {
 
         guard.insert(0, item.clone());
 
-        if guard.len() > MAX_HISTORY_COUNT {
-            guard.truncate(MAX_HISTORY_COUNT);
+        let max_count = self.settings.max_history();
+        if guard.len() > max_count {
+            guard.truncate(max_count);
         }
 
         drop(guard);
