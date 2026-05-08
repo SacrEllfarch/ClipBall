@@ -8,31 +8,20 @@
 </head>
 <body>
   <main id="app" class="app app--ball">
-    <button id="floating-ball" class="floating-ball glass" type="button" title="展开剪贴板历史" aria-label="展开剪贴板历史">
+    <div id="floating-ball" class="floating-ball glass" title="点击展开 / 按住拖动">
       <span aria-hidden="true">📋</span>
-    </button>
+    </div>
 
     <section id="history-panel" class="history-panel glass" aria-label="剪贴板历史面板">
       <header class="panel-header" data-tauri-drag-region>
-        <div class="header-left">
-          <span aria-hidden="true">🔍</span>
-          <input id="search-input" class="search-input" type="search" placeholder="搜索内容..." aria-label="搜索历史内容">
-        </div>
-        <div class="header-right">
-          <button id="pin-btn" class="icon-btn" type="button" title="固定面板" aria-label="固定面板">📌</button>
+        <span class="panel-title" data-tauri-drag-region>剪贴板历史</span>
+        <div class="header-actions">
+          <button id="clear-btn" class="icon-btn" type="button" title="清空" aria-label="清空">🗑</button>
           <button id="close-btn" class="icon-btn" type="button" title="收起" aria-label="收起">✕</button>
         </div>
       </header>
 
       <div id="history-list" class="panel-content" aria-live="polite"></div>
-
-      <footer class="panel-footer">
-        <button class="icon-btn" type="button" title="设置" aria-label="设置">⚙</button>
-        <span id="history-count">已记录 0 / 100 条</span>
-        <button id="clear-btn" class="clear-btn" type="button">清空</button>
-      </footer>
-
-      <div id="resize-handle" class="resize-handle" title="拖拽调整大小" aria-hidden="true"></div>
     </section>
   </main>
 

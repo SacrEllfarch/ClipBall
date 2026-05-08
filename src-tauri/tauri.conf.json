@@ -9,6 +9,7 @@
     "frontendDist": "../src"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "label": "main",
@@ -41,7 +42,11 @@
           "windows": ["main"],
           "permissions": [
             "core:default",
-            "opener:default"
+            "opener:default",
+            "core:window:allow-start-dragging",
+            "global-shortcut:allow-is-registered",
+            "global-shortcut:allow-register",
+            "global-shortcut:allow-unregister"
           ]
         }
       ]
@@ -49,6 +54,12 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi"]
+    "targets": ["nsis", "msi"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ]
   }
 }

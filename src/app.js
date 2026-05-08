@@ -2,205 +2,208 @@ const appRoot = document.getElementById("app");
 const floatingBall = document.getElementById("floating-ball");
 const historyPanel = document.getElementById("history-panel");
 const closeBtn = document.getElementById("close-btn");
-const pinBtn = document.getElementById("pin-btn");
 const clearBtn = document.getElementById("clear-btn");
-const searchInput = document.getElementById("search-input");
 const historyList = document.getElementById("history-list");
-const historyCount = document.getElementById("history-count");
-const resizeHandle = document.getElementById("resize-handle");
 
-const historyItems = [
-  {
-    id: "text-1",
-    type: "text",
-    typeLabel: "文本",
-    icon: "📝",
-    timeLabel: "刚刚",
-    body: "这是一个兼顾美观与实用性的剪贴板历史记录工具 UI/UX 方案设计。",
-  },
-  {
-    id: "link-1",
-    type: "link",
-    typeLabel: "链接",
-    icon: "🔗",
-    timeLabel: "15 分钟前",
-    body: "https://github.com/your-project/clipboard-ui",
-  },
-  {
-    id: "file-1",
-    type: "file",
-    typeLabel: "文件",
-    icon: "📁",
-    timeLabel: "2 小时前",
-    body: "产品设计规范V2.pdf - 2.4 MB",
-  },
-  {
-    id: "text-2",
-    type: "text",
-    typeLabel: "文本",
-    icon: "📝",
-    timeLabel: "昨天",
-    body: "console.log(\"Hello, Glassmorphism!\");",
-  },
-];
+const DRAG_THRESHOLD = 4; // 移动超过该像素则视为拖动
+let historyItems = [];
 
-let isPinned = false;
-let visibleItems = [...historyItems];
+function getTauri() {
+  return window.__TAURI__ || null;
+}
 
-function getApi() {
-  if (window.__TAURI__) {
-    const { invoke } = window.__TAURI__.tauri;
-    return {
-      setWindowMode: (mode) => invoke("set_window_mode", { mode }),
-      getWindowMode: () => invoke("get_window_mode"),
-      resizeWindowBy: (width, height) =>
-        invoke("resize_window_by", { width, height }),
+const tauri = getTauri();
+const invoke = tauri?.core?.invoke || tauri?.tauri?.invoke || null;
+const listen = tauri?.event?.listen || null;
+
+const api = invoke
+  ? {
+      setMode: (mode) => invoke("set_window_mode", { mode }),
+      togglePanel: () => invoke("toggle_panel"),
+      startDragging: () => invoke("start_dragging"),
+      quit: () => invoke("quit_app"),
+      getHistory: () => invoke("get_history"),
+      deleteItem: (id) => invoke("delete_history_item", { id }),
+      clearAll: () => invoke("clear_history"),
+      copyText: (body) => invoke("copy_to_clipboard", { body }),
+    }
+  : {
+      setMode: async () => {},
+      togglePanel: async () => {},
+      startDragging: async () => {},
+      quit: async () => {},
+      getHistory: async () => [],
+      deleteItem: async () => {},
+      clearAll: async () => {},
+      copyText: async () => {},
     };
+
+async function loadHistory() {
+  try {
+    historyItems = await api.getHistory();
+    renderHistory();
+  } catch (e) {
+    console.error("[clipball] Failed to load history:", e);
   }
-  return {
-    setWindowMode: async () => {},
-    getWindowMode: async () => "ball",
-    resizeWindowBy: () => {},
-  };
 }
 
 function setMode(mode) {
   appRoot.classList.toggle("app--ball", mode === "ball");
   appRoot.classList.toggle("app--panel", mode === "panel");
-  getApi().setWindowMode(mode);
-
+  api.setMode(mode);
   if (mode === "panel") {
-    window.requestAnimationFrame(() => searchInput.focus());
+    loadHistory();
   }
 }
 
-function createActionButton(label, title, onClick) {
-  const button = document.createElement("button");
-  button.className = "action-btn";
-  button.type = "button";
-  button.title = title;
-  button.setAttribute("aria-label", title);
-  button.textContent = label;
-  button.addEventListener("click", (event) => {
-    event.stopPropagation();
-    onClick();
-  });
-  return button;
-}
-
-function renderHistory(items) {
+function renderHistory() {
   historyList.textContent = "";
 
-  if (items.length === 0) {
+  if (historyItems.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "没有匹配的历史记录";
+    empty.textContent = "暂无剪贴板历史";
     historyList.append(empty);
-    historyCount.textContent = "已记录 0 / 100 条";
     return;
   }
 
-  for (const item of items) {
+  for (const item of historyItems) {
     const row = document.createElement("article");
     row.className = "history-item";
     row.tabIndex = 0;
 
-    const header = document.createElement("div");
-    header.className = "item-header";
-
-    const type = document.createElement("span");
-    type.className = "item-type";
-    type.textContent = `${item.icon} ${item.typeLabel}`;
-
-    const time = document.createElement("span");
-    time.textContent = item.timeLabel;
+    const meta = document.createElement("div");
+    meta.className = "item-meta";
+    const typeSpan = document.createElement("span");
+    typeSpan.textContent = `${item.icon} ${item.typeLabel}`;
+    const timeSpan = document.createElement("span");
+    timeSpan.textContent = item.timeLabel;
+    meta.append(typeSpan, timeSpan);
 
     const body = document.createElement("div");
     body.className = "item-body";
     body.textContent = item.body;
 
-    const actions = document.createElement("div");
-    actions.className = "item-actions";
-    actions.append(
-      createActionButton("📋", "复制", () => markUsed(item)),
-      createActionButton("⭐", "收藏", () => markUsed(item)),
-      createActionButton("🗑", "删除", () => deleteItem(item.id)),
-    );
+    const del = document.createElement("button");
+    del.className = "delete-btn";
+    del.type = "button";
+    del.title = "删除";
+    del.textContent = "✕";
+    del.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteItem(item.id);
+    });
 
-    header.append(type, time);
-    row.append(header, body, actions);
-    row.addEventListener("click", () => markUsed(item));
+    row.append(meta, body, del);
+    row.addEventListener("click", () => copyItem(item));
     row.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        markUsed(item);
-      }
+      if (event.key === "Enter") copyItem(item);
     });
     historyList.append(row);
   }
-
-  historyCount.textContent = `已记录 ${historyItems.length} / 100 条`;
 }
 
-function filterHistory() {
-  const query = searchInput.value.trim().toLowerCase();
-  visibleItems = historyItems.filter((item) =>
-    item.body.toLowerCase().includes(query),
-  );
-  renderHistory(visibleItems);
-}
-
-function markUsed(item) {
-  console.info("Selected clipboard history item:", item.id);
-}
-
-function deleteItem(id) {
-  const itemIndex = historyItems.findIndex((item) => item.id === id);
-  if (itemIndex >= 0) {
-    historyItems.splice(itemIndex, 1);
-    filterHistory();
+async function copyItem(item) {
+  try {
+    await api.copyText(item.body);
+  } catch (e) {
+    console.error("[clipball] Copy failed:", e);
   }
 }
 
-floatingBall.addEventListener("click", () => setMode("panel"));
+async function deleteItem(id) {
+  try {
+    await api.deleteItem(id);
+    historyItems = historyItems.filter((i) => i.id !== id);
+    renderHistory();
+  } catch (e) {
+    console.error("[clipball] Delete failed:", e);
+  }
+}
+
+async function clearAll() {
+  try {
+    await api.clearAll();
+    historyItems = [];
+    renderHistory();
+  } catch (e) {
+    console.error("[clipball] Clear failed:", e);
+  }
+}
+
+// 悬浮球：短按展开，长按（超过阈值）则拖动窗口
+let ballDownPos = null;
+let ballDragging = false;
+
+floatingBall.addEventListener("mousedown", (event) => {
+  if (event.button !== 0) return;
+  ballDownPos = { x: event.clientX, y: event.clientY };
+  ballDragging = false;
+});
+
+floatingBall.addEventListener("mousemove", (event) => {
+  if (!ballDownPos || ballDragging) return;
+  const dx = event.clientX - ballDownPos.x;
+  const dy = event.clientY - ballDownPos.y;
+  if (Math.hypot(dx, dy) > DRAG_THRESHOLD) {
+    ballDragging = true;
+    api.startDragging();
+  }
+});
+
+floatingBall.addEventListener("mouseup", (event) => {
+  if (!ballDownPos) return;
+  const wasDragging = ballDragging;
+  ballDownPos = null;
+  ballDragging = false;
+  if (!wasDragging && event.button === 0) {
+    setMode("panel");
+  }
+});
+
+floatingBall.addEventListener("mouseleave", () => {
+  ballDownPos = null;
+});
+
+// 面板按钮
 closeBtn.addEventListener("click", () => setMode("ball"));
-pinBtn.addEventListener("click", () => {
-  isPinned = !isPinned;
-  pinBtn.classList.toggle("is-active", isPinned);
-});
 clearBtn.addEventListener("click", () => {
-  historyItems.splice(0, historyItems.length);
-  filterHistory();
+  if (confirm("确定清空所有剪贴板历史？")) clearAll();
 });
-searchInput.addEventListener("input", filterHistory);
+
+// ESC 收起面板
 historyPanel.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !isPinned) {
-    setMode("ball");
-  }
+  if (event.key === "Escape") setMode("ball");
 });
 
-let isResizing = false;
-let resizeStart = { x: 0, y: 0 };
+// 监听后端事件
+if (listen) {
+  listen("history:updated", (event) => {
+    const item = event.payload;
+    if (item && !historyItems.some((i) => i.id === item.id)) {
+      historyItems.unshift(item);
+      if (historyItems.length > 100) historyItems.pop();
+      if (appRoot.classList.contains("app--panel")) renderHistory();
+    }
+  });
 
-resizeHandle.addEventListener("mousedown", (event) => {
-  isResizing = true;
-  resizeStart = { x: event.screenX, y: event.screenY };
-  document.body.style.userSelect = "none";
-});
+  listen("history:deleted", (event) => {
+    historyItems = historyItems.filter((i) => i.id !== event.payload);
+    if (appRoot.classList.contains("app--panel")) renderHistory();
+  });
 
-window.addEventListener("mousemove", (event) => {
-  if (!isResizing) {
-    return;
-  }
+  listen("history:cleared", () => {
+    historyItems = [];
+    if (appRoot.classList.contains("app--panel")) renderHistory();
+  });
 
-  const deltaWidth = event.screenX - resizeStart.x;
-  const deltaHeight = event.screenY - resizeStart.y;
-  resizeStart = { x: event.screenX, y: event.screenY };
-  getApi().resizeWindowBy(deltaWidth, deltaHeight);
-});
+  // 全局快捷键触发的模式切换
+  listen("window:mode", (event) => {
+    const mode = event.payload;
+    appRoot.classList.toggle("app--ball", mode === "ball");
+    appRoot.classList.toggle("app--panel", mode === "panel");
+    if (mode === "panel") loadHistory();
+  });
+}
 
-window.addEventListener("mouseup", () => {
-  isResizing = false;
-  document.body.style.userSelect = "";
-});
-
-renderHistory(visibleItems);
+loadHistory();
